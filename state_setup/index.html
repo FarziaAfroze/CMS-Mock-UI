@@ -1,0 +1,469 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Add New State — ATM Controller Console</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#161A2B; --ink-soft:#5B6072; --line:#E3E5EC; --line-soft:#EEEFF4;
+    --bg:#F5F6FA; --surface:#FFFFFF; --brand:#233A6B; --brand-soft:#EAEFFA; --accent:#3D6FB4;
+    --ok:#1B8A5A; --ok-soft:#E7F5EE; --warn:#B5790A; --warn-soft:#FCF1DE;
+    --blocked:#B23B3B; --blocked-soft:#FBEAEA; --idle:#9096A8; --idle-soft:#EDEEF3;
+    --edge:#6A4FB0; --edge-soft:#F1ECFB;
+    --radius:10px; --mono:'IBM Plex Mono','SFMono-Regular',Consolas,monospace;
+    --sans:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;background:var(--bg);color:var(--ink);font-family:var(--sans);}
+  button{font-family:var(--sans); cursor:pointer; border:none;}
+  input,select,textarea{font-family:var(--sans);}
+
+  .topbar{background:var(--surface); border-bottom:1px solid var(--line); padding:14px 28px; position:sticky; top:0; z-index:30;}
+  .crumbs{font-size:12.5px; color:var(--ink-soft);}
+  .crumbs b{color:var(--ink); font-weight:600;}
+
+  .layout{display:flex; max-width:1280px; margin:0 auto; gap:24px; padding:26px 36px 100px; align-items:flex-start;}
+  .col-main{flex:1; min-width:0;}
+  .col-preview{width:320px; flex-shrink:0; position:sticky; top:70px;}
+
+  .page-head{margin-bottom:18px;}
+  .page-head h1{font-size:20px; margin:0 0 4px; font-weight:700;}
+  .page-head p{margin:0; font-size:13.5px; color:var(--ink-soft); max-width:600px;}
+
+  .card{background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); margin-bottom:18px; overflow:hidden;}
+  .card-head{background:var(--brand); color:#fff; font-size:12px; font-weight:700; letter-spacing:.04em; text-transform:uppercase; padding:11px 18px;
+    display:flex; justify-content:space-between; align-items:center;}
+  .card-body{padding:20px 22px;}
+  .grid{display:grid; grid-template-columns:1fr 1fr; gap:16px 20px;}
+  .field{display:flex; flex-direction:column; gap:6px;}
+  .field.span-2{grid-column:span 2;}
+  .field label{font-size:12.5px; font-weight:600;}
+  .field label .opt{color:var(--idle); font-weight:500;}
+  .hint{font-size:11.5px; color:var(--ink-soft); margin-top:-2px;}
+  input[type=text],select,textarea{font-size:13.5px; padding:9px 11px; border:1px solid var(--line); border-radius:7px; background:#fff; color:var(--ink); width:100%;}
+  input:focus,select:focus,textarea:focus{outline:2px solid var(--accent); outline-offset:1px; border-color:var(--accent);}
+  input[readonly]{background:var(--line-soft); color:var(--ink-soft);}
+  .mono-input{font-family:var(--mono); text-transform:uppercase;}
+  .mono-input.invalid{border-color:var(--blocked); background:var(--blocked-soft);}
+  .err-msg{font-size:11.5px; color:var(--blocked); margin-top:2px;}
+  .warn-msg{font-size:11.5px; color:var(--warn); margin-top:2px;}
+
+  .type-select-wrap{position:relative;}
+  select#typeSelect{font-weight:600;}
+  optgroup{font-weight:700; font-style:normal;}
+
+  .schema-badge{font-size:10.5px; font-weight:700; padding:2px 8px; border-radius:20px; text-transform:uppercase; letter-spacing:.03em;}
+  .schema-badge.verified{background:var(--ok-soft); color:var(--ok);}
+  .schema-badge.unverified{background:var(--warn-soft); color:var(--warn);}
+
+  .callout{display:flex; gap:10px; padding:12px 14px; border-radius:8px; font-size:12.8px; line-height:1.5; margin-bottom:16px;}
+  .callout.warn{background:var(--warn-soft); color:#7a5108;}
+  .callout.info{background:var(--brand-soft); color:#1c2f57;}
+  .callout-icon{flex-shrink:0; font-weight:700;}
+
+  .entry-row{display:grid; grid-template-columns:52px 1fr 200px; gap:14px; padding:14px 0; border-bottom:1px solid var(--line-soft); align-items:start;}
+  .entry-row:last-child{border-bottom:none;}
+  .entry-num{font-family:var(--mono); font-size:12px; color:var(--idle); font-weight:700; padding-top:9px;}
+  .entry-info .name{font-size:13.5px; font-weight:600; margin-bottom:2px;}
+  .entry-info .desc{font-size:12px; color:var(--ink-soft); line-height:1.45;}
+  .entry-tag{display:inline-flex; align-items:center; gap:4px; font-size:10.5px; font-weight:700; padding:2px 7px; border-radius:20px; margin-bottom:4px; text-transform:uppercase;}
+  .entry-tag.edge{background:var(--edge-soft); color:var(--edge);}
+  .entry-tag.screen{background:var(--idle-soft); color:var(--ink-soft);}
+  .entry-tag.flag{background:var(--brand-soft); color:var(--brand);}
+  .entry-tag.fixed{background:var(--line-soft); color:var(--idle);}
+  .entry-input-wrap input, .entry-input-wrap select{width:100%;}
+  .toggle-seg{display:flex; border:1px solid var(--line); border-radius:7px; overflow:hidden; margin-bottom:8px; font-size:11.5px;}
+  .toggle-seg button{flex:1; padding:6px 4px; background:#fff; color:var(--ink-soft); font-weight:600;}
+  .toggle-seg button.active{background:var(--brand); color:#fff;}
+
+  .footer-actions{display:flex; justify-content:space-between; align-items:center; margin-top:8px; padding-top:18px; border-top:1px solid var(--line);}
+  .btn{font-size:13px; font-weight:600; padding:9px 16px; border-radius:8px;}
+  .btn-primary{background:var(--brand); color:#fff;}
+  .btn-primary:hover{background:#1a2c54;}
+  .btn-primary:disabled{background:var(--idle); cursor:not-allowed;}
+  .btn-ghost{background:transparent; color:var(--ink-soft); border:1px solid var(--line);}
+  .btn-ghost:hover{border-color:var(--ink-soft); color:var(--ink);}
+
+  /* preview */
+  .preview-card{background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); padding:18px;}
+  .preview-title{font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:.04em; color:var(--ink-soft); margin-bottom:14px;}
+  .node-this{
+    background:var(--brand); color:#fff; border-radius:9px; padding:12px 14px; text-align:center; margin-bottom:4px;
+  }
+  .node-this .num{font-family:var(--mono); font-size:17px; font-weight:700;}
+  .node-this .typ{font-size:11px; opacity:.85; margin-top:2px;}
+  .edge-list{margin-top:14px; display:flex; flex-direction:column; gap:8px;}
+  .edge-item{display:flex; align-items:center; gap:8px; font-size:12px;}
+  .edge-arrow{color:var(--edge); font-weight:700;}
+  .edge-target{
+    font-family:var(--mono); font-weight:700; background:var(--edge-soft); color:var(--edge);
+    padding:3px 8px; border-radius:6px; font-size:12px; white-space:nowrap;
+  }
+  .edge-target.undefined{background:var(--warn-soft); color:var(--warn);}
+  .edge-cond{color:var(--ink-soft); font-size:11.5px;}
+  .no-edges{font-size:12px; color:var(--idle); font-style:italic; margin-top:10px;}
+  .preview-note{font-size:11px; color:var(--idle); margin-top:14px; line-height:1.5; border-top:1px solid var(--line-soft); padding-top:10px;}
+</style>
+</head>
+<body>
+  <div class="topbar"><div class="crumbs">State Management &nbsp;›&nbsp; State Catalog &nbsp;›&nbsp; <b>Add New State</b></div></div>
+  <div class="layout">
+    <div class="col-main" id="mainCol"></div>
+    <div class="col-preview" id="previewCol"></div>
+  </div>
+
+<script>
+/* ================= REFERENCE DATA ================= */
+const groups = [
+  {id:1, name:"ATM Default Group", code:"001"},
+  {id:2, name:"GRG Extended Group", code:"002"},
+  {id:3, name:"Multicurrency Kiosk Group", code:"003"},
+];
+
+// States already defined per group (seed data, for uniqueness checks + edge-target existence checks)
+let existingStates = {
+  1: [ {num:"000", type:"A"}, {num:"001", type:"B"}, {num:"010", type:"D"}, {num:"020", type:"F"}, {num:"090", type:"I"}, {num:"099", type:"J"} ],
+  2: [ {num:"000", type:"A"}, {num:"001", type:"T"} ],
+  3: [ {num:"000", type:"A"} ],
+};
+
+// All 40 state types (from Table 2-1), with category. "schema" present = verified from manual; absent = unverified/generic.
+const stateTypes = [
+  {code:"A", label:"Card Read", cat:"Card & PIN"},
+  {code:"T", label:"Card Read - PIN Entry Initiation", cat:"Card & PIN"},
+  {code:"B", label:"PIN Entry", cat:"Card & PIN"},
+  {code:"M", label:"Enhanced PIN Entry", cat:"Card & PIN"},
+  {code:"b", label:"Customer Selectable PIN State", cat:"Card & PIN"},
+  {code:"m", label:"PIN & Language Select State", cat:"Card & PIN"},
+  {code:"L", label:"Card Write", cat:"Card & PIN"},
+  {code:"O", label:"Cardholder Verification", cat:"Card & PIN"},
+
+  {code:"F", label:"Amount Entry", cat:"Amount & FDK"},
+  {code:"R", label:"Enhanced Amount Entry", cat:"Amount & FDK"},
+  {code:"G", label:"Amount Check", cat:"Amount & FDK"},
+  {code:"E", label:"Four FDK Selection Function", cat:"Amount & FDK"},
+  {code:"Y", label:"Eight FDK Selection Function", cat:"Amount & FDK"},
+  {code:"W", label:"FDK Switch", cat:"Amount & FDK"},
+  {code:"X", label:"FDK Information Entry", cat:"Amount & FDK"},
+
+  {code:"D", label:"Pre-Set Operation Code Buffer", cat:"Transaction Flow"},
+  {code:"H", label:"Information Entry", cat:"Transaction Flow"},
+  {code:"I", label:"Transaction Request", cat:"Transaction Flow"},
+  {code:"J", label:"Close", cat:"Transaction Flow"},
+  {code:"K", label:"FIT Switch", cat:"Transaction Flow"},
+  {code:"_", label:"Expanded FIT Switch", cat:"Transaction Flow"},
+  {code:"S", label:"Language Code Switch", cat:"Transaction Flow"},
+  {code:"V", label:"Language Select From Card", cat:"Transaction Flow"},
+  {code:"U", label:"Device Fitness Flow Select", cat:"Transaction Flow"},
+  {code:"k", label:"Smart FIT Check State", cat:"Transaction Flow"},
+
+  {code:"C", label:"Envelope Dispenser", cat:"Cash & Deposit"},
+  {code:">", label:"Cash Accept State", cat:"Cash & Deposit"},
+  {code:"w", label:"Cheque Accept State", cat:"Cash & Deposit"},
+  {code:"z001", label:"Bunch Cheque Accept State", cat:"Cash & Deposit"},
+  {code:"z002", label:"Bunch Cheque Handling State", cat:"Cash & Deposit"},
+  {code:"z003", label:"Cheque Detail Display State", cat:"Cash & Deposit"},
+  {code:"z004", label:"Display Cheque Summary State", cat:"Cash & Deposit"},
+  {code:"z008", label:"Insert Card State", cat:"Cash & Deposit"},
+  {code:"z009", label:"Buffer Validation State", cat:"Cash & Deposit"},
+  {code:"z010", label:"Local Cash Dispense State", cat:"Cash & Deposit"},
+  {code:"z013", label:"Data Copy and Compare State", cat:"Cash & Deposit"},
+  {code:"z014", label:"Cash Deposit Handling State", cat:"Cash & Deposit"},
+  {code:"z017", label:"Note Mix Selection State", cat:"Cash & Deposit"},
+  {code:"z020", label:"FIT Search State", cat:"Cash & Deposit"},
+  {code:"z024", label:"Prepare Dispense State", cat:"Cash & Deposit"},
+
+  {code:"N", label:"Camera Control", cat:"Special / Extension"},
+  {code:"Z", label:"Extension State", cat:"Special / Extension"},
+  {code:"&", label:"Barcode Reader State", cat:"Special / Extension"},
+];
+
+// Verified table-entry schemas (extracted directly from Advance NDC Reference Manual, Chapter 2)
+const schemas = {
+  A: [
+    {n:2, name:"Screen Number", kind:"screen", desc:"Displayed while the SST waits for the consumer to enter a card."},
+    {n:3, name:"Good Read Next State Number", kind:"edge", cond:"On successful card read (no FIT used, or FIT match)"},
+    {n:4, name:"Error (Misread) Screen Number", kind:"screen", desc:"Shown if the card can't be read; the card is ejected."},
+    {n:5, name:"Read Condition 1", kind:"flag", desc:"Bitmask — which card track(s)/chip data to read."},
+    {n:6, name:"Read Condition 2", kind:"flag", desc:"Bitmask — which card track(s)/chip data to read."},
+    {n:7, name:"Read Condition 3", kind:"flag", desc:"Bitmask — which card track(s)/chip data to read."},
+    {n:8, name:"Card Return Flag / Extension State", kind:"flagOrEdge", cond:"Points to Extension State 1",
+      options:[{v:"000",l:"Eject card immediately"},{v:"001",l:"Return card per Transaction Reply command"}]},
+    {n:9, name:"No FIT Match Next State Number", kind:"edge", cond:"On FIT mismatch, or smart card with chip-connect bit set and no match"},
+  ],
+  B: [
+    {n:2, name:"Screen Number", kind:"screen", desc:"Prompts the consumer to enter the PIN."},
+    {n:3, name:"Time-Out Next State Number", kind:"edge", cond:"PIN not entered within the time limit (enter 255 to disable)"},
+    {n:4, name:"Cancel Next State Number", kind:"edge", cond:"Consumer presses Cancel before all PIN digits entered"},
+    {n:5, name:"Local PIN Check — Good PIN Next State Number", kind:"edge", cond:"Correct PIN entered"},
+    {n:6, name:"Local PIN Check — Max Bad PINs Next State Number", kind:"edge", cond:"Correct PIN not entered after allowed attempts (entry 9)"},
+    {n:7, name:"Local PIN Check Error Screen Number", kind:"screen", desc:"Shown after each incorrect PIN attempt."},
+    {n:8, name:"Remote PIN Check Next State Number", kind:"edge", cond:"When local PIN verification is not performed"},
+    {n:9, name:"Local PIN Check Max Retries", kind:"number", desc:"1–9 incorrect attempts allowed before Entry 6 is taken."},
+  ],
+  F: [
+    {n:2, name:"Screen Number", kind:"screen", desc:"Prompts the consumer to enter an amount."},
+    {n:3, name:"Time-Out Next State Number", kind:"edge", cond:"Amount not entered within the time limit (enter 255 to disable)"},
+    {n:4, name:"Cancel Next State Number", kind:"edge", cond:"Consumer presses Cancel"},
+    {n:5, name:"FDK A Next State Number", kind:"edge", cond:"FDK A / touch area pressed (enter 255 to deactivate)"},
+    {n:6, name:"FDK B Next State Number", kind:"edge", cond:"FDK B / touch area pressed (enter 255 to deactivate)"},
+    {n:7, name:"FDK C Next State Number", kind:"edge", cond:"FDK C / touch area pressed (enter 255 to deactivate)"},
+    {n:8, name:"FDK D Next State Number", kind:"edge", cond:"FDK D / touch area pressed (enter 255 to deactivate)"},
+    {n:9, name:"Amount Display Screen Number", kind:"screen", desc:"Overlay screen for cursor position / echo field."},
+  ],
+  I: [
+    {n:2, name:"Screen Number", kind:"screen", desc:"Usually a 'Please Wait' screen shown while Central is contacted."},
+    {n:3, name:"Central Response Timeout Next State Number", kind:"edge", cond:"Central does not reply within timer 03"},
+    {n:4, name:"Send Track 2 Data", kind:"flag", options:[{v:"000",l:"No"},{v:"001",l:"Yes"}]},
+    {n:5, name:"Send Track 1/3 Data", kind:"flag", options:[{v:"000",l:"Neither"},{v:"001",l:"Track 3 only"},{v:"002",l:"Track 1 only"},{v:"003",l:"Both"}]},
+    {n:6, name:"Send Operation Code Data", kind:"flag", options:[{v:"000",l:"No"},{v:"001",l:"Yes"}]},
+    {n:7, name:"Send Amount Data", kind:"flag", options:[{v:"000",l:"No"},{v:"001",l:"Yes"}]},
+    {n:8, name:"Send PIN Buffer Data / Extended Format", kind:"flag", options:[{v:"000",l:"Standard format — don't send Buffer A"},{v:"001",l:"Send Buffer A"}]},
+    {n:9, name:"Send Buffer B/C, or Extension State Number", kind:"flagOrEdge", cond:"Points to Extension State (holds state number) if extended format selected in Entry 8",
+      options:[{v:"000",l:"Send no buffers"},{v:"001",l:"Send Buffer B"},{v:"002",l:"Send Buffer C"},{v:"003",l:"Send Buffers B and C"}]},
+  ],
+  J: [
+    {n:2, name:"Receipt Delivered Screen Number", kind:"screen", desc:"Shown if a receipt is delivered and the card is not captured."},
+    {n:3, name:"Next State Number", kind:"fixed", value:"000", desc:"Must be 000 — Close is a terminal state; the session ends here."},
+    {n:4, name:"No Receipt Delivered Screen Number", kind:"screen"},
+    {n:5, name:"Card Retained Screen Number", kind:"screen", desc:"Shown if the card is captured during Close."},
+    {n:6, name:"Statement Delivered Screen Number", kind:"screen"},
+    {n:7, name:"Reserved", kind:"fixed", value:"000", desc:"Must be 000."},
+    {n:8, name:"BNA Notes Returned Screen Number", kind:"screen"},
+    {n:9, name:"Extension State Number", kind:"edgeOptional", cond:"Optional Extension State 1", desc:"Leave 000 if not used."},
+  ],
+};
+
+/* ================= STATE ================= */
+let form = {
+  groupId: 1,
+  stateNum: "",
+  type: "A",
+  label: "",
+  entries: {}, // entryNumber -> value
+};
+let numError = "";
+
+function currentGroup(){ return groups.find(g=>g.id===form.groupId); }
+function schemaFor(type){ return schemas[type] || null; }
+function typeInfo(code){ return stateTypes.find(t=>t.code===code); }
+
+/* ================= RENDER: MAIN COLUMN ================= */
+function renderMain(){
+  const schema = schemaFor(form.type);
+  const info = typeInfo(form.type);
+
+  document.getElementById('mainCol').innerHTML = `
+    <div class="page-head">
+      <h1>Add New State</h1>
+      <p>Define a single NDC state table entry: a unique 3-character state number, a state type, and the type-specific values for entries 2–9.</p>
+    </div>
+
+    <div class="card">
+      <div class="card-head">Identity</div>
+      <div class="card-body grid">
+        <div class="field">
+          <label>ATM Group</label>
+          <select onchange="form.groupId=parseInt(this.value); form.stateNum=''; numError=''; renderAll();">
+            ${groups.map(g=>`<option value="${g.id}" ${g.id===form.groupId?'selected':''}>${g.name} (${g.code})</option>`).join('')}
+          </select>
+          <div class="hint">State numbers must be unique within this group's state table.</div>
+        </div>
+        <div class="field">
+          <label>State Number <span class="opt">3-char, alphanumeric 000–ZZZ</span></label>
+          <input class="mono-input ${numError?'invalid':''}" maxlength="3" value="${form.stateNum}"
+            oninput="onNumInput(this.value)">
+          ${numError ? `<div class="err-msg">${numError}</div>` : `<div class="hint">Value 255 is reserved and cannot be used as a state's own number.</div>`}
+        </div>
+        <div class="field span-2">
+          <label>State Type</label>
+          <select id="typeSelect" onchange="form.type=this.value; form.entries={}; renderAll();">
+            ${['Card & PIN','Amount & FDK','Transaction Flow','Cash & Deposit','Special / Extension'].map(cat=>`
+              <optgroup label="${cat}">
+                ${stateTypes.filter(t=>t.cat===cat).map(t=>`<option value="${t.code}" ${t.code===form.type?'selected':''}>${t.code} — ${t.label}${schemas[t.code]?'':' (unverified)'}</option>`).join('')}
+              </optgroup>
+            `).join('')}
+          </select>
+          <div class="hint">
+            <span class="schema-badge ${schema?'verified':'unverified'}">${schema? '✓ Verified schema' : '⚠ Unverified — raw entry mode'}</span>
+            &nbsp;${info?info.label:''}
+          </div>
+        </div>
+        <div class="field span-2">
+          <label>Label <span class="opt">optional, your own reference name</span></label>
+          <input type="text" value="${form.label}" oninput="form.label=this.value; renderPreview();" placeholder="e.g. Main card entry point">
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-head">
+        Table Entries
+        <span class="schema-badge ${schema?'verified':'unverified'}">${schema? '✓ Verified':'⚠ Unverified'}</span>
+      </div>
+      <div class="card-body">
+        ${!schema ? `<div class="callout warn"><span class="callout-icon">⚠</span> Entry definitions for type <b>${form.type}</b> (${info?info.label:''}) haven't been extracted from the reference manual yet. Enter raw values for now — field meanings, including which entries are edges, will be added once verified against the manual.</div>` : ''}
+
+        <div class="entry-row">
+          <div class="entry-num">E1</div>
+          <div class="entry-info"><div class="name">State Type</div><div class="desc">Fixed to the type selected above.</div></div>
+          <div class="entry-input-wrap"><input type="text" value="${form.type}" readonly class="mono-input"></div>
+        </div>
+
+        ${schema ? schema.map(e=>renderVerifiedEntry(e)).join('') : renderGenericEntries()}
+      </div>
+    </div>
+
+    <div class="footer-actions">
+      <button class="btn btn-ghost" onclick="alert('Returning to State Catalog (not built in this mockup).')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveState()">Save state</button>
+    </div>
+  `;
+}
+
+function renderVerifiedEntry(e){
+  const val = form.entries[e.n] ?? (e.kind==='fixed' ? e.value : '');
+  let tagClass = e.kind==='edge' || e.kind==='edgeOptional' ? 'edge' : e.kind==='screen' ? 'screen' : e.kind==='fixed' ? 'fixed' : 'flag';
+  let tagLabel = e.kind==='edge' ? 'Edge' : e.kind==='edgeOptional' ? 'Edge (optional)' : e.kind==='screen' ? 'Screen' : e.kind==='fixed' ? 'Fixed' : e.kind==='number' ? 'Value' : 'Flag';
+
+  let inputHtml = '';
+  if(e.kind==='fixed'){
+    inputHtml = `<input type="text" value="${e.value}" readonly class="mono-input">`;
+  } else if(e.kind==='flag' && e.options){
+    inputHtml = `<select onchange="onEntryInput(${e.n}, this.value)">
+      ${e.options.map(o=>`<option value="${o.v}" ${val===o.v?'selected':''}>${o.v} — ${o.l}</option>`).join('')}
+    </select>`;
+  } else if(e.kind==='flagOrEdge'){
+    const mode = form.entries['_mode'+e.n] || (e.options && e.options.some(o=>o.v===val) ? 'flag' : (val ? 'edge' : 'flag'));
+    inputHtml = `
+      <div class="toggle-seg">
+        <button class="${mode==='flag'?'active':''}" onclick="setEntryMode(${e.n},'flag')">Fixed value</button>
+        <button class="${mode==='edge'?'active':''}" onclick="setEntryMode(${e.n},'edge')">Points to Extension State</button>
+      </div>
+      ${mode==='flag'
+        ? `<select onchange="onEntryInput(${e.n}, this.value)">${e.options.map(o=>`<option value="${o.v}" ${val===o.v?'selected':''}>${o.v} — ${o.l}</option>`).join('')}</select>`
+        : `<input class="mono-input" maxlength="3" value="${val}" placeholder="e.g. Z01" oninput="onEntryInput(${e.n}, this.value.toUpperCase())">`
+      }`;
+  } else if(e.kind==='number'){
+    inputHtml = `<input type="text" maxlength="1" value="${val}" oninput="onEntryInput(${e.n}, this.value)" style="width:60px">`;
+  } else if(e.kind==='edge' || e.kind==='edgeOptional'){
+    const exists = existingStates[form.groupId].some(s=>s.num===val);
+    const isSentinel = val==='255' || val==='';
+    inputHtml = `<input class="mono-input" maxlength="3" value="${val}" placeholder="e.g. 125" oninput="onEntryInput(${e.n}, this.value.toUpperCase())">
+      ${(!isSentinel && val && !exists) ? `<div class="warn-msg">State ${val} isn't defined in this group yet — you can wire this now and define it later.</div>` : ''}`;
+  } else { // screen
+    inputHtml = `<input class="mono-input" maxlength="3" value="${val}" placeholder="e.g. 004" oninput="onEntryInput(${e.n}, this.value.toUpperCase())">`;
+  }
+
+  return `
+    <div class="entry-row">
+      <div class="entry-num">E${e.n}</div>
+      <div class="entry-info">
+        <span class="entry-tag ${tagClass}">${tagLabel}</span>
+        <div class="name">${e.name}</div>
+        <div class="desc">${e.desc || e.cond || ''}</div>
+      </div>
+      <div class="entry-input-wrap">${inputHtml}</div>
+    </div>`;
+}
+
+function renderGenericEntries(){
+  let html = '';
+  for(let n=2;n<=9;n++){
+    const val = form.entries[n] ?? '';
+    html += `
+      <div class="entry-row">
+        <div class="entry-num">E${n}</div>
+        <div class="entry-info"><div class="name">Entry ${n}</div><div class="desc" style="color:var(--idle)">Meaning not yet verified for this type.</div></div>
+        <div class="entry-input-wrap"><input class="mono-input" maxlength="3" value="${val}" oninput="onEntryInput(${n}, this.value.toUpperCase())"></div>
+      </div>`;
+  }
+  return html;
+}
+
+/* ================= RENDER: PREVIEW COLUMN ================= */
+function renderPreview(){
+  const schema = schemaFor(form.type);
+  const info = typeInfo(form.type);
+  const edges = schema ? schema.filter(e=>e.kind==='edge'||e.kind==='edgeOptional'||(e.kind==='flagOrEdge')) : [];
+
+  const edgeRows = edges.map(e=>{
+    let target, cond;
+    if(e.kind==='flagOrEdge'){
+      const mode = form.entries['_mode'+e.n] || 'flag';
+      if(mode!=='edge') return null;
+      target = form.entries[e.n];
+      cond = e.cond;
+    } else {
+      target = form.entries[e.n];
+      cond = e.cond;
+    }
+    if(!target || target==='255') return null;
+    const exists = existingStates[form.groupId].some(s=>s.num===target);
+    return `<div class="edge-item">
+      <span class="edge-arrow">→</span>
+      <span class="edge-target ${exists?'':'undefined'}">${target}</span>
+      <span class="edge-cond">${cond}</span>
+    </div>`;
+  }).filter(Boolean);
+
+  document.getElementById('previewCol').innerHTML = `
+    <div class="preview-card">
+      <div class="preview-title">Live edge preview</div>
+      <div class="node-this">
+        <div class="num">${form.stateNum || '???'}</div>
+        <div class="typ">${form.type} — ${info?info.label:''}${form.label?' · '+form.label:''}</div>
+      </div>
+      <div class="edge-list">
+        ${edgeRows.length ? edgeRows.join('') : `<div class="no-edges">${schema ? (schema.some(e=>e.kind==='edge'||e.kind==='edgeOptional'||e.kind==='flagOrEdge') ? 'No outgoing edges filled in yet.' : 'This state type has no outgoing edges — it is terminal.') : 'Edge detection unavailable — schema not verified for this type.'}</div>`}
+      </div>
+      <div class="preview-note">Only shows edges from verified schema fields. Purple = confirmed edge from the reference manual, not inferred. Amber target = points to a state not yet defined in this group.</div>
+    </div>
+  `;
+}
+
+/* ================= ACTIONS ================= */
+function onNumInput(v){
+  v = v.toUpperCase().slice(0,3);
+  form.stateNum = v;
+  validateNum();
+  renderAll();
+}
+function validateNum(){
+  numError = "";
+  if(form.stateNum.length===0){ return; }
+  if(form.stateNum.length<3){ numError = "State number must be exactly 3 characters."; return; }
+  if(form.stateNum==='255'){ numError = "255 is reserved and can't be used as a state's own number."; return; }
+  const conflict = existingStates[form.groupId].find(s=>s.num===form.stateNum);
+  if(conflict){ numError = `State ${form.stateNum} already exists in this group (type ${conflict.type}). Choose a different number.`; }
+}
+
+function onEntryInput(n, val){
+  form.entries[n] = val.slice(0,3);
+  renderAll();
+}
+function setEntryMode(n, mode){
+  form.entries['_mode'+n] = mode;
+  renderAll();
+}
+
+function saveState(){
+  validateNum();
+  if(numError){ alert("Fix the State Number field before saving:\\n" + numError); renderAll(); return; }
+  if(form.stateNum.length!==3){ alert("Enter a 3-character state number."); return; }
+  existingStates[form.groupId].push({num: form.stateNum, type: form.type});
+  alert(`State ${form.stateNum} (type ${form.type}) saved to ${currentGroup().name}.`);
+  form = { groupId: form.groupId, stateNum:"", type: form.type, label:"", entries:{} };
+  renderAll();
+}
+
+function renderAll(){
+  renderMain();
+  renderPreview();
+}
+renderAll();
+</script>
+</body>
+</html>

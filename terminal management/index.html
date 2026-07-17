@@ -1,0 +1,760 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Terminal Management — ATM Controller Console</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#161A2B; --ink-soft:#5B6072; --line:#E3E5EC; --line-soft:#EEEFF4;
+    --bg:#F5F6FA; --surface:#FFFFFF; --brand:#233A6B; --brand-soft:#EAEFFA; --accent:#3D6FB4;
+    --ok:#1B8A5A; --ok-soft:#E7F5EE; --warn:#B5790A; --warn-soft:#FCF1DE;
+    --blocked:#B23B3B; --blocked-soft:#FBEAEA; --idle:#9096A8; --idle-soft:#EDEEF3;
+    --radius:10px; --mono:'IBM Plex Mono','SFMono-Regular',Consolas,monospace;
+    --sans:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;background:var(--bg);color:var(--ink);font-family:var(--sans);}
+  .app{display:flex;flex-direction:column;min-height:100vh;}
+
+  .topbar{background:var(--surface); border-bottom:1px solid var(--line); padding:14px 28px;
+    display:flex; align-items:center; justify-content:space-between; gap:20px; position:sticky; top:0; z-index:20;}
+  .crumbs{font-size:12.5px; color:var(--ink-soft); display:flex; align-items:center; gap:6px;}
+  .crumbs b{color:var(--ink); font-weight:600;} .crumbs a{color:var(--accent); cursor:pointer; text-decoration:none;}
+  .crumbs a:hover{text-decoration:underline;}
+  .terminal-id-block{display:flex; align-items:center; gap:10px; margin-top:4px;}
+  .terminal-id-block .name{font-size:16px; font-weight:700;}
+  .status-badge{font-size:10.5px; font-weight:700; padding:3px 9px; border-radius:20px; text-transform:uppercase; letter-spacing:.03em;}
+  .status-badge.Active{background:var(--ok-soft); color:var(--ok);}
+  .status-badge.Draft{background:var(--warn-soft); color:var(--warn);}
+  .status-badge.Blocked{background:var(--blocked-soft); color:var(--blocked);}
+  .status-badge.Testing{background:var(--idle-soft); color:var(--idle);}
+  .top-actions{display:flex; gap:10px; align-items:center;}
+  .progress-chip{font-size:12.5px; color:var(--ink-soft); display:flex; align-items:center; gap:8px;}
+  .progress-track{width:110px; height:6px; border-radius:4px; background:var(--line-soft); overflow:hidden;}
+  .progress-fill{height:100%; background:var(--ok); border-radius:4px; transition:width .25s ease;}
+
+  button{font-family:var(--sans); cursor:pointer; border:none;}
+  .btn{font-size:13px; font-weight:600; padding:9px 16px; border-radius:8px; display:inline-flex; align-items:center; gap:6px; transition:all .12s ease;}
+  .btn-primary{background:var(--brand); color:#fff;}
+  .btn-primary:hover{background:#1a2c54;} .btn-primary:disabled{background:var(--idle); cursor:not-allowed;}
+  .btn-ghost{background:transparent; color:var(--ink-soft); border:1px solid var(--line);}
+  .btn-ghost:hover{border-color:var(--ink-soft); color:var(--ink);}
+  .btn-text{background:none; color:var(--accent); font-size:13px; font-weight:600; padding:6px 4px;}
+  .btn-text:hover{text-decoration:underline;}
+
+  .body{display:flex; flex:1; align-items:flex-start;}
+
+  /* ===== Directory view ===== */
+  .directory-wrap{flex:1; padding:28px 36px 60px; max-width:1180px; margin:0 auto; width:100%;}
+  .dir-head{display:flex; justify-content:space-between; align-items:flex-end; margin-bottom:18px;}
+  .dir-head h1{font-size:20px; margin:0 0 4px; font-weight:700;}
+  .dir-head p{margin:0; font-size:13.5px; color:var(--ink-soft);}
+  .toolbar{display:flex; gap:10px; margin-bottom:16px; align-items:center;}
+  .toolbar input[type=text]{flex:1; max-width:320px;}
+  .toolbar select{width:170px;}
+  input[type=text],select{font-family:var(--sans); font-size:13.5px; padding:9px 11px; border:1px solid var(--line); border-radius:7px; background:#fff; color:var(--ink);}
+  input:focus,select:focus{outline:2px solid var(--accent); outline-offset:1px; border-color:var(--accent);}
+
+  .summary-strip{display:flex; gap:12px; margin-bottom:18px;}
+  .summary-card{flex:1; background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); padding:14px 16px;}
+  .summary-card .num{font-size:22px; font-weight:700; font-family:var(--mono);}
+  .summary-card .lbl{font-size:12px; color:var(--ink-soft); margin-top:2px;}
+
+  .table-card{background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); overflow:hidden;}
+  table.dir-table{width:100%; border-collapse:collapse; font-size:13px;}
+  table.dir-table th{text-align:left; font-size:11px; text-transform:uppercase; letter-spacing:.03em; color:var(--ink-soft);
+    padding:11px 16px; border-bottom:1px solid var(--line); font-weight:700; background:var(--bg);}
+  table.dir-table td{padding:12px 16px; border-bottom:1px solid var(--line-soft); vertical-align:middle;}
+  table.dir-table tr.data-row{cursor:pointer;}
+  table.dir-table tr.data-row:hover{background:var(--brand-soft);}
+  table.dir-table tr:last-child td{border-bottom:none;}
+  .mono{font-family:var(--mono); font-size:12.5px;}
+  .acronym-cell{font-weight:600;}
+  .sub-cell{font-size:11.5px; color:var(--ink-soft); margin-top:2px;}
+  .mini-progress{display:flex; align-items:center; gap:8px;}
+  .mini-track{width:60px; height:5px; border-radius:3px; background:var(--line-soft); overflow:hidden;}
+  .mini-fill{height:100%; background:var(--warn); border-radius:3px;}
+  .mini-fill.complete{background:var(--ok);}
+  .mini-text{font-size:11px; color:var(--ink-soft); white-space:nowrap;}
+  .blocked-flag{color:var(--blocked); font-weight:700; font-size:11px;}
+  .empty-state{padding:60px 20px; text-align:center; color:var(--ink-soft); font-size:13.5px;}
+
+  /* ===== Stepper (wizard) ===== */
+  .stepper{width:290px; flex-shrink:0; background:var(--surface); border-right:1px solid var(--line); padding:20px 0; align-self:stretch;}
+  .stepper-title{font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:var(--ink-soft); padding:0 22px 14px;}
+  .step-item{display:flex; gap:12px; padding:13px 22px; cursor:pointer; position:relative; border-left:3px solid transparent;}
+  .step-item:hover{background:var(--bg);}
+  .step-item.active{background:var(--brand-soft); border-left-color:var(--brand);}
+  .step-line{position:absolute; left:33px; top:38px; width:2px; height:calc(100% - 6px); background:var(--line);}
+  .step-item:last-child .step-line{display:none;}
+  .step-dot{width:24px; height:24px; border-radius:50%; flex-shrink:0; display:flex; align-items:center; justify-content:center;
+    font-size:11px; font-weight:700; z-index:1; background:var(--idle-soft); color:var(--idle); border:2px solid var(--idle-soft);}
+  .step-dot.complete{background:var(--ok); color:#fff; border-color:var(--ok);}
+  .step-dot.draft{background:var(--warn-soft); color:var(--warn); border:2px solid var(--warn);}
+  .step-dot.blocked{background:var(--blocked-soft); color:var(--blocked); border:2px solid var(--blocked);}
+  .step-meta .step-name{font-size:13.5px; font-weight:600; line-height:1.3;}
+  .step-meta .step-status{font-size:11px; margin-top:2px; font-weight:600;}
+  .step-meta .step-status.complete{color:var(--ok);} .step-meta .step-status.draft{color:var(--warn);}
+  .step-meta .step-status.blocked{color:var(--blocked);} .step-meta .step-status.idle{color:var(--idle);}
+  .req-star{color:var(--blocked); font-size:10px; vertical-align:top;}
+
+  /* ===== Main panel (wizard) ===== */
+  .main{flex:1; padding:28px 36px 60px; max-width:900px;}
+  .panel-head{margin-bottom:22px;}
+  .panel-head h1{font-size:20px; margin:0 0 6px; font-weight:700;}
+  .panel-head p{margin:0; font-size:13.5px; color:var(--ink-soft); max-width:640px; line-height:1.5;}
+  .card{background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); margin-bottom:18px; overflow:hidden;}
+  .card-head{background:var(--brand); color:#fff; font-size:12px; font-weight:700; letter-spacing:.04em; text-transform:uppercase; padding:11px 18px;}
+  .card-body{padding:20px 22px;}
+  .grid{display:grid; grid-template-columns:1fr 1fr; gap:16px 20px;}
+  .grid.cols-3{grid-template-columns:1fr 1fr 1fr;}
+  .field{display:flex; flex-direction:column; gap:6px;}
+  .field.span-2{grid-column:span 2;}
+  .field label{font-size:12.5px; font-weight:600; color:var(--ink);}
+  .field label .opt{color:var(--idle); font-weight:500;}
+  .hint{font-size:11.5px; color:var(--ink-soft); margin-top:-2px;}
+  input[type=number],input[type=date],textarea{font-family:var(--sans); font-size:13.5px; padding:9px 11px; border:1px solid var(--line); border-radius:7px; background:#fff; color:var(--ink); width:100%;}
+  input[readonly]{background:var(--line-soft); color:var(--ink-soft);}
+  .mono-input{font-family:var(--mono);}
+  .toggle-row{display:flex; align-items:center; justify-content:space-between; padding:4px 0;}
+  .toggle-row .label{font-size:13.5px; font-weight:600;}
+  .toggle-row .sub{font-size:11.5px; color:var(--ink-soft); margin-top:2px;}
+  .switch{position:relative; width:42px; height:24px; flex-shrink:0;}
+  .switch input{opacity:0; width:0; height:0; position:absolute;}
+  .slider{position:absolute; inset:0; background:var(--idle-soft); border-radius:24px; transition:.15s; cursor:pointer;}
+  .slider:before{content:""; position:absolute; width:18px; height:18px; left:3px; top:3px; background:#fff; border-radius:50%; transition:.15s; box-shadow:0 1px 2px rgba(0,0,0,.2);}
+  .switch input:checked + .slider{background:var(--brand);}
+  .switch input:checked + .slider:before{transform:translateX(18px);}
+  table.data-table{width:100%; border-collapse:collapse; font-size:12.8px;}
+  table.data-table th{text-align:left; font-size:11px; text-transform:uppercase; letter-spacing:.03em; color:var(--ink-soft); padding:8px 10px; border-bottom:1px solid var(--line); font-weight:700;}
+  table.data-table td{padding:7px 10px; border-bottom:1px solid var(--line-soft); vertical-align:middle;}
+  table.data-table input,table.data-table select{padding:6px 8px; font-size:12.8px;}
+  table.data-table tr:last-child td{border-bottom:none;}
+  .row-remove{color:var(--blocked); background:none; font-size:16px; padding:2px 6px; border-radius:5px;}
+  .row-remove:hover{background:var(--blocked-soft);}
+  .add-row-btn{margin-top:10px;}
+  .checklist{display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px 20px;}
+  .check-item{display:flex; align-items:center; gap:8px; font-size:13px;}
+  .check-item input{width:16px; height:16px; accent-color:var(--brand);}
+  .callout{display:flex; gap:10px; padding:12px 14px; border-radius:8px; font-size:12.8px; line-height:1.5; margin-bottom:16px;}
+  .callout.info{background:var(--brand-soft); color:#1c2f57;}
+  .callout.warn{background:var(--warn-soft); color:#7a5108;}
+  .callout-icon{flex-shrink:0; font-weight:700;}
+  .footer-actions{display:flex; justify-content:space-between; align-items:center; margin-top:8px; padding-top:18px; border-top:1px solid var(--line);}
+  .footer-left{display:flex; gap:10px;} .footer-right{display:flex; gap:10px; align-items:center;}
+  .autosave-note{font-size:11.5px; color:var(--idle); font-style:italic;}
+  .review-section{border:1px solid var(--line); border-radius:8px; margin-bottom:14px;}
+  .review-section-head{display:flex; justify-content:space-between; align-items:center; padding:12px 16px; background:var(--bg); border-bottom:1px solid var(--line);}
+  .review-section-head .name{font-size:13.5px; font-weight:700; display:flex; align-items:center; gap:8px;}
+  .review-grid{padding:12px 16px; display:grid; grid-template-columns:1fr 1fr; gap:8px 24px; font-size:12.8px;}
+  .review-grid .k{color:var(--ink-soft);} .review-grid .v{font-weight:600;}
+  .activate-box{background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); padding:22px; text-align:center; margin-top:8px;}
+  .activate-box p{font-size:13px; color:var(--ink-soft); margin:6px 0 16px;}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="topbar" id="topbar"></div>
+  <div class="body" id="body"></div>
+</div>
+
+<script>
+/* ================= DATA MODEL ================= */
+const stepDefs = [
+  {id:1, name:"Institution & Identity", required:true},
+  {id:2, name:"Location", required:true},
+  {id:3, name:"Site Contact / Custodian", required:true},
+  {id:4, name:"Hardware & Protocol", required:true},
+  {id:5, name:"Security Keys", required:true, canBlock:true},
+  {id:6, name:"Cassette Setup", required:true},
+  {id:7, name:"Cash & Currency Configuration", required:true},
+  {id:8, name:"Configuration Triggers", required:true},
+  {id:9, name:"Review & Activate", required:false, isReview:true},
+];
+const triggerLabels = [
+  ["loadStateTable","Load state table"],["loadScreen","Load screen"],["loadConfigParams","Load configuration parameters"],
+  ["loadFIT","Load FIT"],["loadDate","Load date"],["loadMasterKey","Load master key"],
+  ["loadCommKey","Load communication key"],["loadConfigId","Load Config ID"],["startUp","Start up"],
+  ["shutdown","Shutdown"],["sendConfigId","Send Config ID"],["sendSupplyCounters","Send supply counters"],
+  ["sendDateTime","Send date and time"],["sendSuppliesData","Send supplies data"],["sendFitnessData","Send fitness data"]
+];
+
+function blankData(){
+  return {
+    terminalNo:"", acronym:"", institution:"", acceptorPoint:"", grouping:"", externalId:"",
+    branch:"", locationLabel:"", country:"", stateProvince:"", city:"", lat:"", lng:"",
+    contactTitle:"Mr.", contactFirst:"", contactLast:"", addr1:"", addr2:"", ctCountry:"", zip:"", region:"", ctCity:"", phone:"", fax:"", email:"",
+    brand:"", status:"Testing", installDate:"", protocol:"", protoVersion:"", hostLink:"", terminalProfile:"",
+    masterKey:"", masterPeriod:"", macKey:"", macPeriod:"", tpkKey:"", tpkPeriod:"", rsa1:"", rsa2:"", rsaIndex:"", rsaRoot:"", certKeyNum:"", keysBlockedReason:"",
+    cassetteTemplate:"", distAlgo:"", maxNotes:"99",
+    cassetteRows:[{no:1,currency:"BDT",denom:"1000"},{no:2,currency:"BDT",denom:"500"},{no:3,currency:"BDT",denom:"1000"},{no:4,currency:"BDT",denom:"500"}],
+    warn1:"50000", warn2:"50000", warn3:"50000", warn4:"50000",
+    multicurrency:false, withdrawalMethod:"mixed", balanceCurrency:"txn_fixed", receiptDefault:"print",
+    currencyRows:[{slot:1,code:"BDT",name:"Bangladeshi Taka",decimals:2,status:"Active"}],
+    reservedRows:[{id:"R1",desc:"",denom:"",cassette:""}],
+    langRows:[{slot:1,lang:"English",locale:"en-GB",status:"Active"}],
+    configId:"0001",
+    triggers:{
+      powerup:{loadStateTable:false,loadScreen:false,loadConfigParams:true,loadFIT:false,loadDate:true,loadMasterKey:false,loadCommKey:true,loadConfigId:true,startUp:false,shutdown:false,sendConfigId:true,sendSupplyCounters:true,sendDateTime:true,sendSuppliesData:true,sendFitnessData:true},
+      supervisor:{loadStateTable:false,loadScreen:false,loadConfigParams:true,loadFIT:false,loadDate:true,loadMasterKey:false,loadCommKey:true,loadConfigId:true,startUp:false,shutdown:false,sendConfigId:true,sendSupplyCounters:true,sendDateTime:true,sendSuppliesData:true,sendFitnessData:true},
+      onrequest:{loadStateTable:true,loadScreen:true,loadConfigParams:true,loadFIT:true,loadDate:true,loadMasterKey:false,loadCommKey:true,loadConfigId:true,startUp:false,shutdown:false,sendConfigId:true,sendSupplyCounters:true,sendDateTime:true,sendSuppliesData:true,sendFitnessData:true}
+    }
+  };
+}
+function blankStepStatus(){ return {1:"idle",2:"idle",3:"idle",4:"idle",5:"idle",6:"idle",7:"idle",8:"idle",9:"idle"}; }
+
+let nextId = 5;
+let terminals = [
+  { id:1, overallStatus:"Active", stepStatus:{1:"complete",2:"complete",3:"complete",4:"complete",5:"complete",6:"complete",7:"complete",8:"complete",9:"complete"},
+    updatedAt:"14 Jul 2026", data:Object.assign(blankData(),{terminalNo:"11040001",acronym:"MOTIJHEEL MAIN",institution:"Prime Bank PLC.",branch:"Motijheel Branch",brand:"Hitachi",protocol:"NDC"}) },
+  { id:2, overallStatus:"Active", stepStatus:{1:"complete",2:"complete",3:"complete",4:"complete",5:"complete",6:"complete",7:"complete",8:"complete",9:"complete"},
+    updatedAt:"12 Jul 2026", data:Object.assign(blankData(),{terminalNo:"11040027",acronym:"MYMENSINGH BRANCH",institution:"Prime Bank PLC.",branch:"Mymensingh Branch",brand:"NCR",protocol:"NDC+"}) },
+  { id:3, overallStatus:"Draft", stepStatus:{1:"complete",2:"complete",3:"complete",4:"complete",5:"blocked",6:"idle",7:"idle",8:"idle",9:"idle"},
+    updatedAt:"15 Jul 2026", data:Object.assign(blankData(),{terminalNo:"11040055",acronym:"PALLABI GRG",institution:"Prime Bank PLC.",branch:"Pallabi Branch",brand:"GRG Banking",protocol:"NDC",keysBlockedReason:"Waiting on Security team — requested 14 Jul"}) },
+  { id:4, overallStatus:"Draft", stepStatus:{1:"complete",2:"complete",3:"draft",4:"idle",5:"idle",6:"idle",7:"idle",8:"idle",9:"idle"},
+    updatedAt:"10 Jul 2026", data:Object.assign(blankData(),{terminalNo:"11040061",acronym:"GULSHAN-2 CRM",institution:"Prime Bank PLC.",branch:"Gulshan Branch",brand:"Diebold Nixdorf",protocol:"DDC"}) },
+];
+
+let view = "directory";     // 'directory' | 'wizard'
+let currentTerminalId = null;
+let currentStep = 1;
+let dirFilter = { q:"", status:"All", brand:"All" };
+
+function curTerm(){ return terminals.find(t=>t.id===currentTerminalId); }
+function d(){ return curTerm().data; }
+function st(){ return curTerm().stepStatus; }
+function statusLabel(s){ return {idle:"Not started", draft:"In progress", complete:"Complete", blocked:"Blocked"}[s]; }
+
+/* ================= TOP BAR ================= */
+function renderTopbar(){
+  const el = document.getElementById('topbar');
+  if(view==='directory'){
+    el.innerHTML = `
+      <div class="crumbs"><b>Terminal Management</b> › Terminal Directory</div>
+      <div class="top-actions"></div>`;
+    return;
+  }
+  const t = curTerm();
+  const total = stepDefs.filter(s=>!s.isReview).length;
+  const done = stepDefs.filter(s=>!s.isReview).filter(s=>st()[s.id]==='complete').length;
+  el.innerHTML = `
+    <div>
+      <div class="crumbs"><a onclick="backToDirectory()">Terminal Management</a> › <a onclick="backToDirectory()">Terminal Directory</a> › <b>${t.data.acronym || "New Terminal"}</b></div>
+      <div class="terminal-id-block">
+        <span class="name">${t.data.acronym || "New terminal"}</span>
+        <span class="status-badge ${t.overallStatus}">${t.overallStatus}</span>
+      </div>
+    </div>
+    <div class="top-actions">
+      <div class="progress-chip">
+        <span>${done} / ${total} complete</span>
+        <div class="progress-track"><div class="progress-fill" style="width:${done/total*100}%"></div></div>
+      </div>
+      <button class="btn btn-ghost" onclick="saveAndExit()">Save &amp; exit</button>
+    </div>`;
+}
+
+/* ================= DIRECTORY VIEW ================= */
+function overallCounts(){
+  return {
+    total: terminals.length,
+    active: terminals.filter(t=>t.overallStatus==='Active').length,
+    draft: terminals.filter(t=>t.overallStatus==='Draft' && !hasBlocked(t)).length,
+    blocked: terminals.filter(hasBlocked).length,
+  };
+}
+function hasBlocked(t){ return Object.values(t.stepStatus).includes('blocked'); }
+
+function filteredTerminals(){
+  return terminals.filter(t=>{
+    const q = dirFilter.q.toLowerCase();
+    const matchesQ = !q || t.data.terminalNo.toLowerCase().includes(q) || t.data.acronym.toLowerCase().includes(q) || t.data.branch.toLowerCase().includes(q);
+    const rowStatus = hasBlocked(t) ? 'Blocked' : t.overallStatus;
+    const matchesStatus = dirFilter.status==='All' || rowStatus===dirFilter.status;
+    const matchesBrand = dirFilter.brand==='All' || t.data.brand===dirFilter.brand;
+    return matchesQ && matchesStatus && matchesBrand;
+  });
+}
+
+function renderDirectory(){
+  const c = overallCounts();
+  const rows = filteredTerminals();
+  const brands = [...new Set(terminals.map(t=>t.data.brand).filter(Boolean))];
+
+  document.getElementById('body').innerHTML = `
+    <div class="directory-wrap">
+      <div class="dir-head">
+        <div>
+          <h1>Terminal Directory</h1>
+          <p>All terminals registered across your acquiring network.</p>
+        </div>
+        <button class="btn btn-primary" onclick="newTerminal()">+ Add new terminal</button>
+      </div>
+
+      <div class="summary-strip">
+        <div class="summary-card"><div class="num">${c.total}</div><div class="lbl">Total terminals</div></div>
+        <div class="summary-card"><div class="num" style="color:var(--ok)">${c.active}</div><div class="lbl">Active</div></div>
+        <div class="summary-card"><div class="num" style="color:var(--warn)">${c.draft}</div><div class="lbl">In draft / onboarding</div></div>
+        <div class="summary-card"><div class="num" style="color:var(--blocked)">${c.blocked}</div><div class="lbl">Blocked</div></div>
+      </div>
+
+      <div class="toolbar">
+        <input type="text" placeholder="Search terminal no., acronym or branch…" value="${dirFilter.q}" oninput="dirFilter.q=this.value; renderDirectory();">
+        <select onchange="dirFilter.status=this.value; renderDirectory();">
+          ${["All","Active","Draft","Blocked"].map(o=>`<option ${dirFilter.status===o?'selected':''}>${o}</option>`).join('')}
+        </select>
+        <select onchange="dirFilter.brand=this.value; renderDirectory();">
+          <option ${dirFilter.brand==='All'?'selected':''}>All</option>
+          ${brands.map(b=>`<option ${dirFilter.brand===b?'selected':''}>${b}</option>`).join('')}
+        </select>
+      </div>
+
+      <div class="table-card">
+        ${rows.length===0 ? `<div class="empty-state">No terminals match your filters.</div>` : `
+        <table class="dir-table">
+          <thead><tr>
+            <th>Terminal</th><th>Institution / Branch</th><th>Brand / Protocol</th><th>Status</th><th>Progress</th><th>Last updated</th>
+          </tr></thead>
+          <tbody>
+            ${rows.map(t=>renderDirRow(t)).join('')}
+          </tbody>
+        </table>`}
+      </div>
+    </div>`;
+}
+
+function renderDirRow(t){
+  const done = stepDefs.filter(s=>!s.isReview).filter(s=>t.stepStatus[s.id]==='complete').length;
+  const total = stepDefs.filter(s=>!s.isReview).length;
+  const blocked = hasBlocked(t);
+  const rowStatus = blocked ? 'Blocked' : t.overallStatus;
+  return `
+    <tr class="data-row" onclick="openTerminal(${t.id})">
+      <td>
+        <div class="acronym-cell">${t.data.acronym || '(unnamed)'}</div>
+        <div class="sub-cell mono">${t.data.terminalNo || '—'}</div>
+      </td>
+      <td>
+        ${t.data.institution || '—'}
+        <div class="sub-cell">${t.data.branch || '—'}</div>
+      </td>
+      <td>
+        ${t.data.brand || '—'}
+        <div class="sub-cell">${t.data.protocol || '—'}</div>
+      </td>
+      <td>
+        <span class="status-badge ${rowStatus}">${rowStatus}</span>
+        ${blocked ? `<div class="blocked-flag" style="margin-top:4px;">⚠ needs attention</div>` : ''}
+      </td>
+      <td>
+        <div class="mini-progress">
+          <div class="mini-track"><div class="mini-fill ${done===total?'complete':''}" style="width:${done/total*100}%"></div></div>
+          <span class="mini-text">${done}/${total}</span>
+        </div>
+      </td>
+      <td class="sub-cell">${t.updatedAt}</td>
+    </tr>`;
+}
+
+function backToDirectory(){ view='directory'; currentTerminalId=null; renderAll(); }
+
+function newTerminal(){
+  const t = { id: nextId++, overallStatus:"Draft", stepStatus: blankStepStatus(), updatedAt: "just now", data: blankData() };
+  terminals.unshift(t);
+  currentTerminalId = t.id;
+  currentStep = 1;
+  view = 'wizard';
+  renderAll();
+}
+
+function openTerminal(id){
+  currentTerminalId = id;
+  const t = curTerm();
+  if(t.overallStatus==='Draft'){
+    const firstIncomplete = stepDefs.find(s=>!s.isReview && t.stepStatus[s.id]!=='complete');
+    currentStep = firstIncomplete ? firstIncomplete.id : 9;
+  } else {
+    currentStep = 1;
+  }
+  view = 'wizard';
+  renderAll();
+}
+
+/* ================= WIZARD VIEW ================= */
+function renderStepper(){
+  return `<div class="stepper" id="stepper">
+    <div class="stepper-title">Onboarding steps</div>
+    ${stepDefs.map((s,i)=>{
+      const s2 = st()[s.id];
+      const dotContent = s2==='complete' ? '✓' : s2==='blocked' ? '!' : s.id;
+      return `
+      <div class="step-item ${currentStep===s.id?'active':''}" onclick="goTo(${s.id})">
+        <div style="position:relative;">
+          <div class="step-dot ${s2}">${dotContent}</div>
+          ${i<stepDefs.length-1?'<div class="step-line"></div>':''}
+        </div>
+        <div class="step-meta">
+          <div class="step-name">${s.name}${s.required?'<span class="req-star"> *</span>':''}</div>
+          <div class="step-status ${s2}">${statusLabel(s2)}</div>
+        </div>
+      </div>`;
+    }).join('')}
+  </div>`;
+}
+
+function goTo(id){ currentStep = id; renderAll(); }
+function setStepStatus(id, s){ st()[id] = s; if(curTerm().overallStatus!=='Active') curTerm().overallStatus = hasBlocked(curTerm()) ? 'Draft' : 'Draft'; }
+function completedCount(){ return stepDefs.filter(s=>!s.isReview).filter(s=>st()[s.id]==='complete').length; }
+
+function field(label, key, opts={}){
+  const val = d()[key] ?? '';
+  const req = opts.required ? '' : '<span class="opt"> (optional)</span>';
+  const cls = opts.mono ? 'mono-input' : '';
+  const ro = opts.readonly ? 'readonly' : '';
+  if(opts.select){
+    const options = opts.select.map(o=>`<option value="${o}" ${o===val?'selected':''}>${o}</option>`).join('');
+    return `<div class="field ${opts.span2?'span-2':''}">
+      <label>${label}${req}</label>
+      <select onchange="d().${key}=this.value" ${ro}>${options}</select>
+      ${opts.hint?`<div class="hint">${opts.hint}</div>`:''}
+    </div>`;
+  }
+  const type = opts.type || 'text';
+  if(type==='text'){
+    return `<div class="field ${opts.span2?'span-2':''}">
+      <label>${label}${req}</label>
+      <input type="text" class="${cls}" value="${val}" ${ro} oninput="d().${key}=this.value;${opts.onInput?opts.onInput+'();':''}${key==='acronym'||key==='terminalNo'?'renderTopbar();':''}">
+      ${opts.hint?`<div class="hint">${opts.hint}</div>`:''}
+    </div>`;
+  }
+  return `<div class="field ${opts.span2?'span-2':''}">
+    <label>${label}${req}</label>
+    <input type="${type}" value="${val}" ${ro} oninput="d().${key}=this.value">
+    ${opts.hint?`<div class="hint">${opts.hint}</div>`:''}
+  </div>`;
+}
+
+function footer(stepId, opts={}){
+  const idx = stepDefs.findIndex(s=>s.id===stepId);
+  const next = stepDefs[idx+1];
+  const prev = stepDefs[idx-1];
+  return `<div class="footer-actions">
+    <div class="footer-left">
+      ${prev? `<button class="btn btn-ghost" onclick="goTo(${prev.id})">← Back</button>`:''}
+      ${opts.allowBlock? `<button class="btn btn-ghost" onclick="markBlocked(${stepId})">Mark as blocked</button>`:''}
+    </div>
+    <div class="footer-right">
+      <span class="autosave-note">Draft saves automatically</span>
+      <button class="btn btn-ghost" onclick="saveDraftStep(${stepId})">Save draft</button>
+      <button class="btn btn-primary" onclick="completeStep(${stepId})">Mark complete ${next? '&amp; continue':''}</button>
+    </div>
+  </div>`;
+}
+
+function triggerCard(title,key){
+  const t = d().triggers[key];
+  return `<div class="card">
+    <div class="card-head">${title}</div>
+    <div class="card-body">
+      <div class="checklist">
+        ${triggerLabels.map(([k,label])=>`
+          <label class="check-item">
+            <input type="checkbox" ${t[k]?'checked':''} onchange="d().triggers['${key}']['${k}']=this.checked">
+            ${label}
+          </label>`).join('')}
+      </div>
+    </div>
+  </div>`;
+}
+
+function reviewSection(id,name,rows){
+  const s2 = st()[id];
+  return `<div class="review-section">
+    <div class="review-section-head">
+      <div class="name">${name} <span class="status-badge ${s2==='complete'?'Active':s2==='blocked'?'Blocked':'Draft'}">${statusLabel(s2)}</span></div>
+      <button class="btn-text" onclick="goTo(${id})">Edit</button>
+    </div>
+    <div class="review-grid">
+      ${rows.map(([k,v])=>`<div class="k">${k}</div><div class="v">${v||'<span style="color:var(--idle)">— not set —</span>'}</div>`).join('')}
+    </div>
+  </div>`;
+}
+
+const renderers = {
+  1: ()=>`
+    <div class="panel-head"><h1>1 · Institution &amp; Identity</h1>
+    <p>Core identity of the terminal. The terminal number becomes the primary key every other record will reference.</p></div>
+    <div class="card"><div class="card-head">Identity</div><div class="card-body grid">
+      ${field("Institution","institution",{required:true,select:["Prime Bank PLC.","— select —"]})}
+      ${field("Terminal number","terminalNo",{required:true,mono:true,hint:"Unique across the institution."})}
+      ${field("Acronym","acronym",{required:true,hint:"Short display name shown across the console."})}
+      ${field("Acceptor point","acceptorPoint",{required:true})}
+      ${field("Grouping","grouping",{required:true,select:["ATM Default Group","— select —"]})}
+      ${field("Terminal external ID","externalId",{required:false})}
+    </div></div>
+    ${footer(1)}`,
+  2: ()=>`
+    <div class="panel-head"><h1>2 · Location</h1>
+    <p>Determines the branch this terminal sits under, and feeds regional defaults later.</p></div>
+    <div class="card"><div class="card-head">Site location</div><div class="card-body grid">
+      ${field("Branch","branch",{required:true})}
+      ${field("Location label","locationLabel",{required:true,hint:"e.g. Motijheel, Gulshan-2 Circle"})}
+      ${field("Country","country",{required:true,select:["Bangladesh","— select —"]})}
+      ${field("State / Province","stateProvince",{required:true})}
+      ${field("City","city",{required:true})}
+      ${field("Latitude","lat",{required:false,type:"number"})}
+      ${field("Longitude","lng",{required:false,type:"number"})}
+    </div></div>
+    ${footer(2)}`,
+  3: ()=>`
+    <div class="panel-head"><h1>3 · Site Contact / Custodian</h1>
+    <p>The person responsible for this terminal on-site. Mandatory before activation.</p></div>
+    <div class="callout info"><span class="callout-icon">ⓘ</span> This contact is who field engineers and monitoring alerts reach first for physical issues.</div>
+    <div class="card"><div class="card-head">Custodian details</div><div class="card-body grid cols-3">
+      ${field("Title","contactTitle",{required:true,select:["Mr.","Ms.","Mrs.","Dr."]})}
+      ${field("First name","contactFirst",{required:true})}
+      ${field("Surname","contactLast",{required:true})}
+    </div></div>
+    <div class="card"><div class="card-head">Contact address</div><div class="card-body grid">
+      ${field("Address line 1","addr1",{required:true,span2:true})}
+      ${field("Address line 2","addr2",{required:false,span2:true})}
+      ${field("Country","ctCountry",{required:true,select:["Bangladesh","— select —"]})}
+      ${field("ZIP code","zip",{required:true})}
+      ${field("Region","region",{required:true})}
+      ${field("City","ctCity",{required:true})}
+      ${field("Phone","phone",{required:true})}
+      ${field("Fax","fax",{required:false})}
+      ${field("Email","email",{required:true,span2:true})}
+    </div></div>
+    ${footer(3)}`,
+  4: ()=>`
+    <div class="panel-head"><h1>4 · Hardware &amp; Protocol</h1>
+    <p>Vendor and protocol determine what cassette layouts and key types are valid in later steps.</p></div>
+    <div class="card"><div class="card-head">Hardware</div><div class="card-body grid">
+      ${field("Brand / vendor","brand",{required:true,select:["— select —","NCR","Diebold Nixdorf","Wincor","Hitachi","GRG Banking"]})}
+      ${field("Status","status",{readonly:true,hint:"Set automatically to Testing until activation."})}
+      ${field("Installation date","installDate",{required:true,type:"date"})}
+    </div></div>
+    <div class="card"><div class="card-head">Protocol</div><div class="card-body grid">
+      ${field("Protocol","protocol",{required:true,select:["— select —","NDC","NDC+","DDC","Wincor NDC","Wincor DDC"]})}
+      ${field("Version","protoVersion",{required:true})}
+      ${field("Host address link","hostLink",{required:true,mono:true})}
+      ${field("Terminal profile","terminalProfile",{required:true})}
+    </div></div>
+    ${footer(4)}`,
+  5: ()=>`
+    <div class="panel-head"><h1>5 · Security Keys</h1>
+    <p>Master, MAC and transport keys are typically issued by a separate security team. If unavailable, mark this step blocked and continue.</p></div>
+    <div class="callout warn"><span class="callout-icon">⚠</span> This step frequently pauses onboarding. Use <b>Mark as blocked</b> below without losing progress elsewhere.</div>
+    <div class="card"><div class="card-head">Key references</div><div class="card-body grid">
+      ${field("Master key ref.","masterKey",{required:true,mono:true})}
+      ${field("Master key renewal period","masterPeriod",{required:false})}
+      ${field("MAC key ref.","macKey",{required:true,mono:true})}
+      ${field("MAC key renewal period","macPeriod",{required:false})}
+      ${field("Transport (TPK) key ref.","tpkKey",{required:true,mono:true})}
+      ${field("Transport key renewal period","tpkPeriod",{required:false})}
+    </div></div>
+    <div class="card"><div class="card-head">RSA keys</div><div class="card-body grid cols-3">
+      ${field("RSA key server 1","rsa1",{required:false})}
+      ${field("RSA key server 2","rsa2",{required:false})}
+      ${field("Current RSA index","rsaIndex",{required:false})}
+      ${field("RSA root key server","rsaRoot",{required:false})}
+      ${field("Certificate key number","certKeyNum",{required:false})}
+    </div></div>
+    <div class="card"><div class="card-body">
+      ${field("Reason for blocking (shown to team)","keysBlockedReason",{required:false,span2:true,hint:"e.g. \"Waiting on Security team — requested 14 Jul\""})}
+    </div></div>
+    ${footer(5,{allowBlock:true})}`,
+  6: ()=>`
+    <div class="panel-head"><h1>6 · Cassette Setup</h1>
+    <p>Cassette count and layout depend on the hardware brand selected in Step 4.</p></div>
+    <div class="card"><div class="card-head">Layout</div><div class="card-body grid cols-3">
+      ${field("Cassette grouping template","cassetteTemplate",{required:true,select:["— select —","4-cassette standard","7-cassette extended"]})}
+      ${field("Distribution algorithm","distAlgo",{required:true,select:["— select —","Default algorithm","Balanced fill"]})}
+      ${field("Max cassette notes","maxNotes",{required:true,type:"number"})}
+    </div></div>
+    <div class="card"><div class="card-head">Cassette assignment</div><div class="card-body">
+      <table class="data-table" id="cassetteTable"></table>
+      <button class="btn btn-ghost add-row-btn" onclick="addCassetteRow()">+ Add cassette</button>
+    </div></div>
+    <div class="card"><div class="card-head">Low-cash warning thresholds</div><div class="card-body grid cols-3">
+      ${field("Cassette 1 threshold","warn1",{required:true,type:"number"})}
+      ${field("Cassette 2 threshold","warn2",{required:true,type:"number"})}
+      ${field("Cassette 3 threshold","warn3",{required:true,type:"number"})}
+      ${field("Cassette 4 threshold","warn4",{required:true,type:"number"})}
+    </div></div>
+    ${footer(6)}`,
+  7: ()=>`
+    <div class="panel-head"><h1>7 · Cash &amp; Currency Configuration</h1>
+    <p>Controls how cash is dispensed and which currencies this terminal recognizes.</p></div>
+    <div class="card"><div class="card-body">
+      <div class="toggle-row">
+        <div><div class="label">Multicurrency ATM</div><div class="sub">If off, only Currency slot 1 is used.</div></div>
+        <label class="switch"><input type="checkbox" ${d().multicurrency?'checked':''} onchange="toggleMulti(this.checked)"><span class="slider"></span></label>
+      </div>
+    </div></div>
+    <div class="card"><div class="card-head">Withdrawal &amp; balance defaults</div><div class="card-body grid">
+      ${field("Default cash withdrawal method","withdrawalMethod",{required:true,onInput:"onWithdrawalChange",select:["mixed","high_denom","low_denom","high_low_exchange","customer_selected","reserved_notes"]})}
+      ${field("Balance currency mode","balanceCurrency",{required:true,select:["txn_fixed","txn_modifiable","account_modifiable"]})}
+      ${field("Default receipt printing","receiptDefault",{required:true,select:["print","no_print","as_previous","deferred"],span2:true})}
+    </div></div>
+    <div class="card"><div class="card-head">Currency slots</div><div class="card-body">
+      <table class="data-table" id="currencyTable"></table>
+      <button class="btn btn-ghost add-row-btn" id="addCurrencyBtn" onclick="addCurrencyRow()">+ Add currency slot</button>
+    </div></div>
+    <div class="card" id="reservedCard" style="display:none;"><div class="card-head">Reserved notes</div><div class="card-body">
+      <div class="callout info"><span class="callout-icon">ⓘ</span> Only used when withdrawal method is "Reserved notes".</div>
+      <table class="data-table" id="reservedTable"></table>
+      <button class="btn btn-ghost add-row-btn" onclick="addReservedRow()">+ Add reserve</button>
+    </div></div>
+    <div class="card"><div class="card-head">Dialogue languages</div><div class="card-body">
+      <table class="data-table" id="langTable"></table>
+      <button class="btn btn-ghost add-row-btn" onclick="addLangRow()">+ Add language slot</button>
+    </div></div>
+    ${footer(7)}`,
+  8: ()=>`
+    <div class="panel-head"><h1>8 · Configuration Triggers</h1>
+    <p>Defines what the terminal loads or sends at power-up, supervisor exit, and on host request.</p></div>
+    <div class="card"><div class="card-body grid">${field("Config ID","configId",{required:true,mono:true,span2:true})}</div></div>
+    ${triggerCard("Power up","powerup")}
+    ${triggerCard("Supervisor exit","supervisor")}
+    ${triggerCard("On request","onrequest")}
+    ${footer(8)}`,
+  9: ()=>`
+    <div class="panel-head"><h1>9 · Review &amp; Activate</h1>
+    <p>Check every section before activating. Activation makes the terminal eligible for live transaction traffic.</p></div>
+    ${reviewSection(1,"Institution & Identity",[["Institution",d().institution],["Terminal number",d().terminalNo],["Acronym",d().acronym],["Grouping",d().grouping]])}
+    ${reviewSection(2,"Location",[["Branch",d().branch],["Location",d().locationLabel],["City",d().city]])}
+    ${reviewSection(3,"Site Contact",[["Name",`${d().contactTitle} ${d().contactFirst} ${d().contactLast}`],["Phone",d().phone],["Email",d().email]])}
+    ${reviewSection(4,"Hardware & Protocol",[["Brand",d().brand],["Protocol",d().protocol+" v"+d().protoVersion]])}
+    ${reviewSection(5,"Security Keys",[["Master key",d().masterKey||"—"],["MAC key",d().macKey||"—"]])}
+    ${reviewSection(6,"Cassette Setup",[["Template",d().cassetteTemplate],["Cassettes configured",d().cassetteRows.length]])}
+    ${reviewSection(7,"Cash & Currency",[["Multicurrency",d().multicurrency?"Yes":"No"],["Withdrawal method",d().withdrawalMethod]])}
+    ${reviewSection(8,"Configuration Triggers",[["Config ID",d().configId]])}
+    <div class="activate-box">
+      ${completedCount()===8
+        ? `<div style="font-weight:700;font-size:14px;margin-bottom:4px;">All required steps complete</div>
+           <p>This terminal is ready to move from Draft to Active.</p>
+           <button class="btn btn-primary" onclick="activate()">Activate terminal</button>`
+        : `<div style="font-weight:700;font-size:14px;margin-bottom:4px;color:var(--warn);">${8-completedCount()} step(s) still need attention</div>
+           <p>Complete every required step to enable activation. This terminal is saved as a draft in the directory.</p>
+           <button class="btn btn-primary" disabled>Activate terminal</button>`}
+    </div>`
+};
+
+function renderWizard(){
+  document.getElementById('body').innerHTML = `${renderStepper()}<div class="main" id="main">${renderers[currentStep]()}</div>`;
+  renderAllTables();
+  onWithdrawalChange();
+}
+
+/* ---- table renderers ---- */
+function renderCassetteTable(){
+  const rows = d().cassetteRows;
+  document.getElementById('cassetteTable').innerHTML = `
+    <thead><tr><th>Cassette</th><th>Currency</th><th>Denomination</th><th></th></tr></thead>
+    <tbody>${rows.map((r,i)=>`
+      <tr><td>#${r.no}</td>
+        <td><input value="${r.currency}" oninput="d().cassetteRows[${i}].currency=this.value"></td>
+        <td><input value="${r.denom}" oninput="d().cassetteRows[${i}].denom=this.value"></td>
+        <td><button class="row-remove" onclick="removeRow('cassetteRows',${i})">✕</button></td>
+      </tr>`).join('')}</tbody>`;
+}
+function addCassetteRow(){ d().cassetteRows.push({no:d().cassetteRows.length+1,currency:"",denom:""}); renderCassetteTable(); }
+
+function renderCurrencyTable(){
+  const rows = d().currencyRows; const showAll = d().multicurrency;
+  document.getElementById('currencyTable').innerHTML = `
+    <thead><tr><th>Slot</th><th>Currency code</th><th>Currency name</th><th>Decimals</th><th>Status</th><th></th></tr></thead>
+    <tbody>${rows.map((r,i)=>`
+      <tr><td>${r.slot}</td>
+        <td><input value="${r.code}" oninput="d().currencyRows[${i}].code=this.value"></td>
+        <td><input value="${r.name}" oninput="d().currencyRows[${i}].name=this.value"></td>
+        <td><input type="number" value="${r.decimals}" style="width:60px" oninput="d().currencyRows[${i}].decimals=this.value"></td>
+        <td><select onchange="d().currencyRows[${i}].status=this.value"><option ${r.status==='Active'?'selected':''}>Active</option><option ${r.status==='Inactive'?'selected':''}>Inactive</option></select></td>
+        <td>${i>0?`<button class="row-remove" onclick="removeRow('currencyRows',${i})">✕</button>`:''}</td>
+      </tr>`).join('')}</tbody>`;
+  const btn = document.getElementById('addCurrencyBtn');
+  if(btn) btn.style.display = (showAll && rows.length<8) ? 'inline-flex':'none';
+}
+function addCurrencyRow(){ d().currencyRows.push({slot:d().currencyRows.length+1,code:"",name:"",decimals:2,status:"Active"}); renderCurrencyTable(); }
+
+function renderReservedTable(){
+  const rows = d().reservedRows;
+  document.getElementById('reservedTable').innerHTML = `
+    <thead><tr><th>Reserve ID</th><th>Description</th><th>Denomination</th><th>Cassette</th><th></th></tr></thead>
+    <tbody>${rows.map((r,i)=>`
+      <tr><td><input value="${r.id}" oninput="d().reservedRows[${i}].id=this.value"></td>
+        <td><input value="${r.desc}" oninput="d().reservedRows[${i}].desc=this.value"></td>
+        <td><input value="${r.denom}" oninput="d().reservedRows[${i}].denom=this.value"></td>
+        <td><input value="${r.cassette}" oninput="d().reservedRows[${i}].cassette=this.value"></td>
+        <td><button class="row-remove" onclick="removeRow('reservedRows',${i})">✕</button></td>
+      </tr>`).join('')}</tbody>`;
+}
+function addReservedRow(){ d().reservedRows.push({id:"",desc:"",denom:"",cassette:""}); renderReservedTable(); }
+
+function renderLangTable(){
+  const rows = d().langRows;
+  document.getElementById('langTable').innerHTML = `
+    <thead><tr><th>Slot</th><th>Language</th><th>Locale code</th><th>Status</th><th></th></tr></thead>
+    <tbody>${rows.map((r,i)=>`
+      <tr><td>${r.slot}</td>
+        <td><input value="${r.lang}" oninput="d().langRows[${i}].lang=this.value"></td>
+        <td><input value="${r.locale}" oninput="d().langRows[${i}].locale=this.value"></td>
+        <td><select onchange="d().langRows[${i}].status=this.value"><option ${r.status==='Active'?'selected':''}>Active</option><option ${r.status==='Inactive'?'selected':''}>Inactive</option></select></td>
+        <td>${i>0?`<button class="row-remove" onclick="removeRow('langRows',${i})">✕</button>`:''}</td>
+      </tr>`).join('')}</tbody>`;
+}
+function addLangRow(){ if(d().langRows.length<8){ d().langRows.push({slot:d().langRows.length+1,lang:"",locale:"",status:"Active"}); renderLangTable(); } }
+
+function removeRow(key,i){ d()[key].splice(i,1); renderAllTables(); }
+function renderAllTables(){
+  if(document.getElementById('cassetteTable')) renderCassetteTable();
+  if(document.getElementById('currencyTable')) renderCurrencyTable();
+  if(document.getElementById('reservedTable')) renderReservedTable();
+  if(document.getElementById('langTable')) renderLangTable();
+}
+function toggleMulti(val){ d().multicurrency = val; renderCurrencyTable(); }
+function onWithdrawalChange(){
+  const showReserved = d().withdrawalMethod === 'reserved_notes';
+  const card = document.getElementById('reservedCard');
+  if(card) card.style.display = showReserved ? 'block':'none';
+}
+
+/* ---- actions ---- */
+function saveDraftStep(stepId){
+  if(st()[stepId]!=='complete') setStepStatus(stepId,'draft');
+  curTerm().updatedAt = "just now";
+  renderAll();
+}
+function markBlocked(stepId){ setStepStatus(stepId,'blocked'); curTerm().updatedAt="just now"; renderAll(); }
+function completeStep(stepId){
+  setStepStatus(stepId,'complete');
+  curTerm().updatedAt = "just now";
+  const idx = stepDefs.findIndex(s=>s.id===stepId);
+  const next = stepDefs[idx+1];
+  if(next) currentStep = next.id;
+  renderAll();
+}
+function activate(){
+  curTerm().overallStatus = 'Active';
+  curTerm().updatedAt = "just now";
+  alert("Terminal activated. It now appears as Active in the directory and is eligible for live transaction traffic.");
+  backToDirectory();
+}
+function saveAndExit(){
+  curTerm().updatedAt = "just now";
+  backToDirectory();
+}
+
+/* ================= MASTER RENDER ================= */
+function renderAll(){
+  renderTopbar();
+  if(view==='directory') renderDirectory(); else renderWizard();
+}
+renderAll();
+</script>
+</body>
+</html>
